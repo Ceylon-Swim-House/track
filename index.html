@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Track your order · Ceylon Swim House</title>
+<link rel="icon" href="brand/mark-sapphire.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500&family=Tenor+Sans&display=swap" rel="stylesheet">
+<style>
+  :root { --sapphire:#16255C; --midnight:#0D1840; --porcelain:#F7F6F2; --mist:#DDE4EF; --moonstone:#D9D3C7; --slate:#4A5578; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--porcelain); color:var(--midnight); font:16px/1.55 "Jost",system-ui,sans-serif; }
+  .wrap { max-width:620px; margin:0 auto; padding:48px 20px 64px; }
+  .logo { display:block; width:240px; max-width:70%; margin:0 auto 40px; }
+  h1 { font-family:"Tenor Sans",serif; font-weight:400; font-size:28px; text-align:center; letter-spacing:.03em; margin:0 0 8px; }
+  .lede { text-align:center; color:var(--slate); margin:0 0 30px; }
+  form { display:flex; gap:8px; }
+  input { flex:1; font:inherit; padding:12px 14px; border:1px solid var(--moonstone); border-radius:6px; background:#fff; letter-spacing:.08em; text-transform:uppercase; color:var(--midnight); min-width:0; }
+  button { font:inherit; padding:12px 22px; border:0; border-radius:6px; background:var(--sapphire); color:var(--porcelain); letter-spacing:.05em; cursor:pointer; }
+  .msg { text-align:center; color:var(--slate); margin-top:24px; }
+  .result { margin-top:40px; }
+  .details { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:18px 24px; margin:0 0 36px; padding:20px 22px; background:#fff; border:1px solid var(--mist); border-radius:8px; }
+  .details dt { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--slate); }
+  .details dd { margin:4px 0 0; font-family:"Tenor Sans",serif; font-size:17px; letter-spacing:.03em; }
+  .details dd.code { letter-spacing:.1em; }
+  ol { list-style:none; margin:0; padding:0; }
+  li { display:grid; grid-template-columns:28px 1fr; gap:16px; padding-bottom:26px; position:relative; }
+  li:not(:last-child)::before { content:""; position:absolute; left:13px; top:28px; bottom:0; width:2px; background:repeating-linear-gradient(180deg, var(--moonstone) 0 5px, transparent 5px 9px); }
+  .line { position:absolute; left:13px; top:28px; width:2px; height:0; background:var(--sapphire); transition:height 1.2s ease; }
+  .dot { width:28px; height:28px; border-radius:50%; border:2px solid var(--moonstone); background:var(--porcelain); }
+  li.reached .dot { background:var(--sapphire); border-color:var(--sapphire); }
+  li.current .dot { box-shadow:0 0 0 5px var(--mist); }
+  .name { font-family:"Tenor Sans",serif; font-size:18px; letter-spacing:.03em; }
+  li:not(.reached) .name { color:var(--slate); }
+  .blurb { font-size:14px; color:var(--slate); }
+  .bar { height:4px; border-radius:2px; background:repeating-linear-gradient(90deg, var(--moonstone) 0 6px, transparent 6px 10px) center / 100% 2px no-repeat; margin-top:10px; max-width:320px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:0; background:var(--sapphire); border-radius:2px; transition:width 1.2s ease; }
+  .courier { margin-top:6px; font-size:14px; }
+  .updated { text-align:center; font-size:13px; color:var(--slate); margin-top:10px; }
+  footer { text-align:center; font-size:13px; color:var(--slate); margin-top:48px; border-top:1px solid var(--moonstone); padding-top:20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="logo" src="brand/lockup-sapphire.png" alt="Ceylon Swim House">
+  <h1>Track your order</h1>
+  <p class="lede">Enter the tracking code we sent you to follow your order through production.</p>
+  <form id="f"><input id="code" placeholder="CSH-XXXXXX" autocomplete="off"><button>Track</button></form>
+  <div id="out"></div>
+  <footer>Ceylon Swim House, an NG Garment Factories company.<br>Premium swimwear, made in Sri Lanka.</footer>
+</div>
+<script src="steps.js?v=6"></script>
+<script>
+  const out = document.getElementById("out");
+  const input = document.getElementById("code");
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const STATIC_SITE = true; // publish.py sets this to true on the online copy
+
+  // Online, each order is a file named by a slow, salted hash of its code (PBKDF2, same
+  // salt and rounds as publish.py), so the public repo can't be turned back into codes.
+  // On the Mac, the server answers.
+  async function fetchOrder(code) {
+    let url = "/api/track?code=" + encodeURIComponent(code);
+    if (STATIC_SITE) {
+      const enc = new TextEncoder();
+      const key = await crypto.subtle.importKey("raw", enc.encode(code), "PBKDF2", false, ["deriveBits"]);
+      const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: enc.encode("csh-track-v2"), iterations: 300000 }, key, 256);
+      url = "status/" + [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, "0")).join("") + ".json?t=" + Date.now();
+    }
+    const r = await fetch(url, { cache: "no-store" });
+    return r.ok ? r.json() : null;
+  }
+
+  async function track(code) {
+    code = code.trim().toUpperCase();
+    if (!code) return;
+    history.replaceState(null, "", "?code=" + encodeURIComponent(code));
+    const o = await fetchOrder(code);
+    if (!o) { out.innerHTML = `<p class="msg">We couldn't find that code. Please check it against the message we sent you.</p>`; return; }
+    o.trackingCode = o.trackingCode || code; // the online file leaves the code out
+    const at = stageIndex(o);
+    // An estimate left in the past (nothing saved for a few days) is hidden rather than shown wrong.
+    const d = new Date(), today = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const est = !o.dispatched && o.estDispatch && o.estDispatch >= today
+      ? new Date(o.estDispatch + "T00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "";
+    out.innerHTML = `<div class="result">
+      <dl class="details">
+        ${o.invoice ? `<div><dt>Order</dt><dd>${esc(o.invoice)}</dd></div>` : ""}
+        <div><dt>Tracking code</dt><dd class="code">${esc(o.trackingCode)}</dd></div>
+        ${est ? `<div><dt>Estimated dispatch</dt><dd>${est}</dd></div>` : ""}
+      </dl>
+      <ol>${STAGES.map((g, i) => `
+        <li class="${i <= at ? "reached" : ""} ${i === at ? "current" : ""}">
+          ${i < STAGES.length - 1 ? `<span class="line" data-p="${i === 0 ? (at > 0 ? 1 : 0) : stageProgress(o, g.k)}"></span>` : ""}<span class="dot"></span>
+          <div><div class="name">${g.label}</div>
+          ${i === at ? `<div class="blurb">${stageBlurb(g, o)}</div>${i > 0 && i < STAGES.length - 1 ? `<div class="bar"><i data-p="${stageProgress(o, g.k)}"></i></div>` : ""}` : ""}
+          ${g.k === "dispatched" && o.dispatched && o.courierNo ? `<div class="courier">${esc(o.courier)} tracking number: <strong>${esc(o.courierNo)}</strong></div>` : ""}
+          </div>
+        </li>`).join("")}
+      </ol>
+      ${o.updatedAt ? `<div class="updated">Last updated ${new Date(o.updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</div>` : ""}
+    </div>`;
+    // Grow each line from the dot down to its share of the gap.
+    setTimeout(() => {
+      out.querySelectorAll(".line").forEach(l => { l.style.height = `calc((100% - 28px) * ${Number(l.dataset.p)})`; });
+      out.querySelectorAll(".bar i").forEach(b => { b.style.width = `${Number(b.dataset.p) * 100}%`; });
+    }, 50);
+  }
+
+  document.getElementById("f").onsubmit = e => { e.preventDefault(); track(input.value); };
+  const q = new URLSearchParams(location.search).get("code");
+  if (q) { input.value = q; track(q); }
+</script>
+</body>
+</html>
