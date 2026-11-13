@@ -1,1 +1,1 @@
-{"invoice": "SW-0078 (Batch 1)", "estDispatch": "2026-11-20", "steps": {}, "beads": true, "kit": false, "dispatched": false, "courier": "", "courierNo": "", "updatedAt": "2026-11-13T05:08:46.816Z"}
+{"invoice": "SW-0078 (Batch 1)", "estDispatch": "2026-11-19", "steps": {"settings": "done", "cut": "done", "sewStrings": "done", "flipStrings": "done", "sewBases": "doing"}, "beads": true, "kit": false, "dispatched": false, "courier": "", "courierNo": "", "updatedAt": "2026-11-13T05:09:14.531Z"}
